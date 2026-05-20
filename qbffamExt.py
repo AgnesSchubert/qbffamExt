@@ -1160,7 +1160,7 @@ def GADGETFAM(base, gadget, n):
 
 # --------------- All-Equal-3SAT ---------------
 def constructCriticalAESAT(n):
-    """
+    r"""
     Build the critical All-Equal-\exists\forall-3SAT instance of size n.
 
     Parameters:
@@ -1475,7 +1475,7 @@ def SuccinctKRadius(n, k):
     
 # --------------- k-Clique Colouring ---------------
 def qbf_clique_colouring(graph_edges, n, k):
-    """
+    r"""
     Build the symbolic QBF formula CC_k(G) for the Clique-Colouring problem.
 
     The formula encodes: B is a proper k-colouring AND
