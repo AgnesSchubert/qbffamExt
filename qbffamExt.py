@@ -1219,7 +1219,7 @@ def constructAESAT(cnf, x, y):
     clauses = len(cnf)
     variables = max(abs(var) for clause in cnf for var in clause)
     
-    selVar = math.ceil(math.log2(clauses))
+    selVar = (clauses - 1).bit_length()
     # e2 contains the ⌈log₂ n⌉ selector variables
     e2 = set(range(variables+1, variables+selVar+1))
     
@@ -1268,6 +1268,21 @@ def AllEqualSAT(n):
     printQBF(v, c, e1, u1, e2, f)
     
 # --------------- Succinct-k-Radius ---------------
+def my_and(*args):
+    return And(*args, simplify=False)
+
+def my_or(*args):
+    return Or(*args, simplify=False)
+    
+def my_implies(*args):
+    return Implies(*args, simplify=False)
+    
+def my_not(*args):
+    return Not(*args, simplify=False)
+    
+def my_equal(*args):
+    return Equal(*args, simplify=False)
+
 def constructCriticalSUCKRAD(n, k):
     """
     Build the symbolic QBF formula for the Succinct-k-Radius problem.
@@ -1294,8 +1309,9 @@ def constructCriticalSUCKRAD(n, k):
             e2  (list): Innermost existential variables (intermediate vertices + Tseitin).
             f   (And): Tseitin-transformed CNF formula (PyEDA).
     """
-    bits_r = math.ceil(math.log2(n))
-    bits_c = math.ceil(math.log2(k + 2))
+    
+    bits_r = (n - 1).bit_length()
+    bits_c = (k + 1).bit_length()
     
     # Create bit-vector variables for each of the k+1 path vertices
     P = []
@@ -1319,32 +1335,32 @@ def constructCriticalSUCKRAD(n, k):
         
         # Chain edge: same row, adjacent columns
         same_row = formula_bitwise_eq(r1, r2)
-        neighbouring_columns = Or(formula_inc(c1, c2), formula_inc(c2, c1))
-        chain = And(same_row, neighbouring_columns)
+        neighbouring_columns = my_or(formula_inc(c1, c2), formula_inc(c2, c1))
+        chain = my_and(same_row, neighbouring_columns)
         
         # Shortcut edge: different rows, columns are 0 and 2 (or vice versa)
         shortcut1 = formula_eq_const(c1, 0) & formula_eq_const(c2, 2)
         shortcut2 = formula_eq_const(c1, 2) & formula_eq_const(c2, 0)
-        shortcut = And(~same_row, Or(shortcut1, shortcut2))
+        shortcut = my_and(~same_row, my_or(shortcut1, shortcut2))
             
-        return Or(chain, shortcut)
+        return my_or(chain, shortcut)
         
     def is_equal_vertice(i, j):
         """Return formula asserting vertices i and j are at identical coordinates."""
         eq_r = formula_bitwise_eq(P[i]['r'], P[j]['r'])
         eq_c = formula_bitwise_eq(P[i]['c'], P[j]['c'])
-        return And(eq_r, eq_c)
+        return my_and(eq_r, eq_c)
 
     # Assemble the matrix:
     # The universal vertex P[k] must be valid; if so, there must exist a valid
     # path P[0]…P[k] where consecutive vertices are equal or connected by an edge.
     valid_start = is_valid(0)
     valid_end = is_valid(k)
-    valid_path = And(*[is_valid(i) for i in range(1,k)])
-    is_path = And(*[Or(is_equal_vertice(i-1, i),
+    valid_path = my_and(*[is_valid(i) for i in range(1,k)])
+    is_path = my_and(*[my_or(is_equal_vertice(i-1, i),
                        has_edge(i-1, i)) for i in range(1, k+1)])                  
     
-    matrix = And(valid_start,Implies(valid_end, And(valid_path, is_path)))
+    matrix = my_and(valid_start,my_implies(valid_end, my_and(valid_path, is_path)))
     
     # Assign quantifier blocks: P[0] = outermost ∃, P[k] = ∀, P[1..k-1] = inner ∃
     e1 = list(P[0]['r']) + list(P[0]['c'])
@@ -1384,8 +1400,7 @@ def formula_leq(binVars, val):
     bits = len(binVars)
     or_terms = []
     current_eq = expr(1)
-    
-    for i in range(bits - 1, -1, -1):
+    for i in range(bits - 1, -1, -1):   # MSB-first: from bits-1 to 0
         bit_val = (val >> i) & 1
         if bit_val == 1:
             # If val's bit is 1: binVars < val if current bit is 0 (strict), else continue
@@ -1396,7 +1411,7 @@ def formula_leq(binVars, val):
             current_eq &= ~binVars[i]
     
     # If all bits matched exactly, binVars == val, which satisfies <=
-    return Or(current_eq, *or_terms)
+    return my_or(current_eq, *or_terms)
 
 def formula_eq_const(binVars, val):
     """
@@ -1415,7 +1430,7 @@ def formula_eq_const(binVars, val):
             bits.append(binVars[i])
         else:
             bits.append(~binVars[i])
-    return And(*bits)
+    return my_and(*bits)
 
 def formula_inc(vars1, vars2):
     """
@@ -1445,7 +1460,7 @@ def formula_inc(vars1, vars2):
     # Reject overflow (e.g. 111…1 + 1 would produce 000…0 with carry-out 1)
     no_overflow = ~carry[bits]
     
-    return And(no_overflow, *constraints)
+    return my_and(no_overflow, *constraints)
     
 def formula_bitwise_eq(vars1, vars2):
     """
@@ -1457,7 +1472,7 @@ def formula_bitwise_eq(vars1, vars2):
     Returns:
         Expr: Conjunction of bit-wise equality constraints.
     """
-    return And(*[vars1[i] == vars2[i] for i in range(len(vars1))])
+    return my_and(*[vars1[i] == vars2[i] for i in range(len(vars1))])
     
 def SuccinctKRadius(n, k):
     """
@@ -1532,24 +1547,24 @@ def qbf_clique_colouring(graph_edges, n, k):
 
     # At least one colour: ∨_c B[v][c]
     for v in range(n):
-        f1_parts.append(Or(*B[v]))
+        f1_parts.append(my_or(*B[v]))
 
     # At most one colour: for each pair (c, d) with c < d: ¬B[v][c] ∨ ¬B[v][d]
     for v in range(n):
         for c in range(k):
             for d in range(c+1, k):
-                f1_parts.append(Or(Not(B[v][c]), Not(B[v][d])))
+                f1_parts.append(my_or(my_not(B[v][c]), my_not(B[v][d])))
 
-    f1 = And(*f1_parts)
+    f1 = my_and(*f1_parts)
 
     # (2) C is a clique: for every non-edge {u,v}, ¬c_u ∨ ¬c_v
     f2_parts = []
     for u in range(n):
         for v in range(u+1, n):
             if A[u][v] == 0:
-                f2_parts.append(Or(Not(C[u]), Not(C[v])))
+                f2_parts.append(my_or(my_not(C[u]), my_not(C[v])))
 
-    f2 = And(*f2_parts) if f2_parts else 1  # trivially true for complete graphs
+    f2 = my_and(*f2_parts) if f2_parts else 1  # trivially true for complete graphs
 
     # (3) C is maximal: every non-C vertex u has at least one non-neighbour in C
     f3_parts = []
@@ -1559,41 +1574,41 @@ def qbf_clique_colouring(graph_edges, n, k):
             if u != v and A[u][v] == 0:
                 right.append(C[v])
         if right:
-            f3_parts.append(Implies(Not(C[u]), Or(*right)))
+            f3_parts.append(my_implies(my_not(C[u]), my_or(*right)))
         else:
             # u is adjacent to all other vertices → u must be in C
             f3_parts.append(C[u])
 
-    f3 = And(*f3_parts)
+    f3 = my_and(*f3_parts)
 
     # (4) T ⊆ C: t_v → c_v
-    f4 = And(*[Implies(T[v], C[v]) for v in range(n)])
+    f4 = my_and(*[my_implies(T[v], C[v]) for v in range(n)])
 
     # (5) Exactly two vertices selected by T:
     #   at most two: for every triple u<v<w, ¬t_u ∨ ¬t_v ∨ ¬t_w
     #   at least two: there exist u<v with t_u ∧ t_v
-    f5_at_most = And(*[Or(Not(T[u]), Not(T[v]), Not(T[w]))
+    f5_at_most = my_and(*[my_or(my_not(T[u]), my_not(T[v]), my_not(T[w]))
                        for u, v, w in combinations(range(n), 3)])
-    f5_at_least = Or(*[And(T[u], T[v]) for u, v in combinations(range(n), 2)])
-    f5 = And(f5_at_least, f5_at_most)
+    f5_at_least = my_or(*[my_and(T[u], T[v]) for u, v in combinations(range(n), 2)])
+    f5 = my_and(f5_at_least, f5_at_most)
 
     # (6) The two selected witnesses must have different colours:
     #   (t_u ∧ t_v) → (∀c: ¬B[u][c] ∨ ¬B[v][c])
     f6_parts = []
     for u in range(n):
         for v in range(u+1, n):
-            left = And(T[u], T[v])
+            left = my_and(T[u], T[v])
             for c in range(k):
-                right = Or(Not(B[u][c]), Not(B[v][c]))
-                f6_parts.append(Implies(left, right))
+                right = my_or(my_not(B[u][c]), my_not(B[v][c]))
+                f6_parts.append(my_implies(left, right))
 
-    f6 = And(*f6_parts)
+    f6 = my_and(*f6_parts)
 
     # Final matrix: Ψ = f1 ∧ ((f2 ∧ f3) → (f4 ∧ f5 ∧ f6))
-    f23 = And(f2, f3)
-    f456 = And(f4, f5, f6)
+    f23 = my_and(f2, f3)
+    f456 = my_and(f4, f5, f6)
 
-    f = And(f1, Implies(f23, f456)).tseitin()
+    f = my_and(f1, my_implies(f23, f456)).tseitin()
     
     # Collect variables into flat lists for quantifier assignment
     flat_B = [var for row in B for var in row]
@@ -1779,22 +1794,22 @@ def ripple_carry_addition(A: list, B: list, prefix: str):#, carry_in: bool = Fal
  
     # Build constraints
     subformulas = []
-    #subformulas.append(Equal(c[0], carry_in))  # c[0] is incoming carry
-    subformulas.append(Equal(c[0], 0))  # c[0] must be 0 for plain addition (no incoming carry)
+    #subformulas.append(my_equal(c[0], carry_in))  # c[0] is incoming carry
+    subformulas.append(my_equal(c[0], 0))  # c[0] must be 0 for plain addition (no incoming carry)
  
     for i in range(L):
         a_i = get_bit(A, i)
         b_i = get_bit(B, i)
         # sum bit: s_i = a_i XOR b_i XOR c_i
         sum_expr = (a_i ^ b_i ^ c[i])
-        subformulas.append(Equal(s[i], sum_expr))
+        subformulas.append(my_equal(s[i], sum_expr))
  
         # carry_out: c[i+1] = (a_i&b_i) | (a_i&c_i) | (b_i&c_i)
         carry_expr = ( (a_i & b_i) | (a_i & c[i]) | (b_i & c[i]) )
-        subformulas.append(Equal(c[i+1], carry_expr))
+        subformulas.append(my_equal(c[i+1], carry_expr))
  
     # final outputs
-    formula = And(*subformulas)
+    formula = my_and(*subformulas)
     return s, c[L], formula  # sum bits, final carry out, formula
  
 # -------------------------
@@ -1841,8 +1856,8 @@ def sum_selected_constants(U: list[int], X: list, out_bits: int, prefix: str):
     # force initial acc == 0
     init_clauses = []
     for b in acc:
-        init_clauses.append(Equal(b, 0))
-    clauses = [And(*init_clauses)]
+        init_clauses.append(my_equal(b, 0))
+    clauses = [my_and(*init_clauses)]
 
     current_acc = acc
     # for each i: current_acc := current_acc + (X[i] ? U[i] : 0)
@@ -1859,7 +1874,7 @@ def sum_selected_constants(U: list[int], X: list, out_bits: int, prefix: str):
 
     # final accumulator is current_acc
     Z = current_acc
-    formula = And(*clauses)
+    formula = my_and(*clauses)
     return Z, formula
  
 # -------------------------
@@ -1876,7 +1891,7 @@ def not_equal_constant(bits: list, t: int):
         else:
             eq_clauses.append(~bits[i])
     # eq_all is true iff bits == t
-    eq_all = And(*eq_clauses)
+    eq_all = my_and(*eq_clauses)
     return ~eq_all  # true iff not equal
  
 # -------------------------
@@ -1919,21 +1934,21 @@ def build_gss_qbf(U: list[int], V: list[int], t: int, n_bits: int):
     # We'll compute sums as intermediate accumulators and equate final accumulator to Z1/Z2
     sum1_bits, sum1_formula = sum_selected_constants(U, X, out_bits, "Usum")
     # force sum1_bits == Z1
-    eq1 = And(*[Equal(sum1_bits[i], Z1[i]) for i in range(out_bits)])
+    eq1 = my_and(*[my_equal(sum1_bits[i], Z1[i]) for i in range(out_bits)])
  
     sum2_bits, sum2_formula = sum_selected_constants(V, Y, out_bits, "Vsum")
-    eq2 = And(*[Equal(sum2_bits[i], Z2[i]) for i in range(out_bits)])
+    eq2 = my_and(*[my_equal(sum2_bits[i], Z2[i]) for i in range(out_bits)])
  
     # Add Z1 + Z2 -> Z3 (Z3 length out_bits+1)
     sum12_bits, carry12, add12_formula = ripple_carry_addition(Z1, Z2, "ADD12")
     # sum12_bits length = out_bits, carry12 is final carry -> compose Z3
-    eq_add = And(*[Equal(sum12_bits[i], Z3[i]) for i in range(out_bits)] + [Equal(carry12, Z3[out_bits])])
+    eq_add = my_and(*[my_equal(sum12_bits[i], Z3[i]) for i in range(out_bits)] + [my_equal(carry12, Z3[out_bits])])
  
     # inequality: Z3 != t  (t must fit into out_bits+1)
     neq_formula = not_equal_constant(Z3, t)
  
     # combine everything
-    matrix = And(sum1_formula, eq1, sum2_formula, eq2, add12_formula, eq_add, neq_formula)
+    matrix = my_and(sum1_formula, eq1, sum2_formula, eq2, add12_formula, eq_add, neq_formula)
  
     return {
         "matrix": matrix,
@@ -2028,9 +2043,13 @@ def GenerateQBF(v, c, e1, u1, e2, f):
     f_string = str(f)
     
     # Translate PyEDA variable objects to their DIMACS integer IDs
-    e1 = [v_map[var] for var in e1]
-    u1 = [v_map[var] for var in u1]
-    e2 = [v_map[var] for var in e2]
+    e1 = [v_map[var] for var in e1 if var in v_map] # dealing with Pyeda-internal simplifications (for example, when family = SUCKRAD, n=2)
+    u1 = [v_map[var] for var in u1 if var in v_map]
+    e2 = [v_map[var] for var in e2 if var in v_map]
+    
+    #e1 = [v_map[var] for var in e1]
+    #u1 = [v_map[var] for var in u1]
+    #e2 = [v_map[var] for var in e2]
     
     print(f"p cnf {v} {c}")
     if e1:
