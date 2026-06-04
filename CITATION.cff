@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: "Schleitzer"
+    given-names: "Agnes"
+    affiliation: "Friedrich Schiller University Jena"
+  - family-names: "Seidl"
+    given-names: "Martina"
+    affiliation: "Johannes Kepler University Linz"
+title: "qbffamExt.py - QBF Instance Generator"
+version: 1.0.0
+# doi: 10.5281/zenodo.XXXXXXX
+date-released: 2026-06-04
+url: "https://github.com/AgnesSchubert/qbffamExt"
+keywords:
+  - QBF
+  - Benchmarks
+  - Proof Complexity
+  - Quantified Boolean Formula
