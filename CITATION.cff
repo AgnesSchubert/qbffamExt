@@ -8,9 +8,9 @@ authors:
     given-names: "Martina"
     affiliation: "Johannes Kepler University Linz"
 title: "qbffamExt.py - QBF Instance Generator"
-version: 1.0.0
-doi: 10.5281/zenodo.20537920
-date-released: 2026-06-04
+version: 1.0.1
+doi: 10.5281/zenodo.20537918
+date-released: 2026-06-12
 url: "https://github.com/AgnesSchubert/qbffamExt"
 keywords:
   - QBF
