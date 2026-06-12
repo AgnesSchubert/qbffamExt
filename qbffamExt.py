@@ -1453,7 +1453,7 @@ def formula_inc(vars1, vars2):
     
     for i in range(bits):
         # Result bit: vars2[i] = vars1[i] XOR carry[i]
-        constraints.append(vars2[i] == (vars1[i] ^ carry[i]))
+        constraints.append(my_equal(vars2[i],(vars1[i] ^ carry[i])))
         # Propagate carry: carry[i+1] = vars1[i] AND carry[i]
         carry[i+1] = vars1[i] & carry[i]
     
@@ -1472,7 +1472,7 @@ def formula_bitwise_eq(vars1, vars2):
     Returns:
         Expr: Conjunction of bit-wise equality constraints.
     """
-    return my_and(*[vars1[i] == vars2[i] for i in range(len(vars1))])
+    return my_and(*[my_equal(vars1[i],vars2[i]) for i in range(len(vars1))])
     
 def SuccinctKRadius(n, k):
     """
